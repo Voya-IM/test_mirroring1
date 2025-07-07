@@ -1,20 +1,46 @@
-name: Mirror to Enterprise
+name: 'Keep sync environments up to date.'
 on:
-  push:
-    branches:
-      - main
- 
-jobs:
-  mirror:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout source repo
-        uses: actions/checkout@v3
-      - name: Push to GitHub Enterprise
-        run: |
-          git config --global user.name "GitHub Actions"
-          git config --global user.email "actions@github.com"
-          git remote add enterprise https://s700232:${{ secrets.GH_ENTERPRISE_PAT }}@github.voya.net/voya/test_mirroring.git
-          git push enterprise main --force
+  schedule:
+    # Run every Monday morning at 4:37am UTC (12:37am EST).
+    - cron: '37 4 * * 1'
 
- 
+jobs:
+  define_site_matrix:
+    uses: ./.github/workflows/call-matrix.yml
+    secrets:
+      PANTHEON_DEVOPS_TOKEN: ${{ secrets.PANTHEON_DEVOPS_TOKEN }}
+
+  update_sync:
+    name: 'Update sync environment'
+    runs-on: [self-hosted, linux, prod]
+    needs:
+      - define_site_matrix
+    strategy:
+      matrix: ${{ fromJson(needs.define_site_matrix.outputs.sites) }}
+      fail-fast: false
+    env:
+      SITE_ID: ${{ matrix.site }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Terminus
+        uses: ./.github/actions/terminus
+        with:
+          terminus-token: ${{ secrets.PANTHEON_DEVOPS_TOKEN }}
+
+      - name: 'Update sync environment'
+        shell: bash
+        run: |
+          source "${GITHUB_WORKSPACE}/.github/scripts/helpers.sh"
+          # Early exit?
+          if ! check_environment "$SITE_ID" "sync"; then
+            echo "::warning::Skipping $SITE_ID, no environment named sync..."
+            exit 0
+          elif ! check_environment "$SITE_ID" "live"; then
+            echo "::warning::Skipping $SITE_ID, no LIVE environment..."
+            exit 0
+          fi
+          terminus env:clone-content --yes -- $SITE_ID.live sync
+
+      - name: 'Terminus logout'
+        if: always()
+        run: terminus auth:logout
