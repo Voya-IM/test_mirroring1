@@ -1,1 +1,20 @@
----
+name: Mirror to Enterprise
+on:
+  push:
+    branches:
+      - main
+ 
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source repo
+        uses: actions/checkout@v3
+      - name: Push to GitHub Enterprise
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          git remote add enterprise https://<username>:${{ secrets.GH_ENTERPRISE_PAT }}@github.voya.net/voya/test_mirroring.git
+          git push enterprise main --force
+
+ 
