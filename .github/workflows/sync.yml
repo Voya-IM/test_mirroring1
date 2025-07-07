@@ -6,7 +6,7 @@ on:
 
 jobs:
   define_site_matrix:
-    uses: ./.github/workflows/call-matrix.yml
+    uses: actions/checkout@v4
     secrets:
       PANTHEON_DEVOPS_TOKEN: ${{ secrets.PANTHEON_DEVOPS_TOKEN }}
 
